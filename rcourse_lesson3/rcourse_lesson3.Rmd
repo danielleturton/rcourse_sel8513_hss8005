@@ -1,0 +1,318 @@
+---
+title: 'R course: Quantitative Linguistics - lesson 3'
+author: 'Danielle Turton'
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Cmd+Shift+Enter*. 
+
+```{r}
+8/2
+```
+
+Add a new chunk by clicking the *Insert Chunk* button on the toolbar or by pressing *Cmd+Option+I*.
+
+When you save the notebook, an HTML file containing the code and output will be saved alongside it (click the *Preview* button or press *Cmd+Shift+K* to preview the HTML file). 
+
+The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
+
+# Today's data
+Today we'll be working with a dataset coded by my Stage 3 students on SEL3094 *Accents of English*.  It is the sociolinguistic variable (ing), so whether speakers say a word like *dancing* with an alveolar [n] or a velar [ŋ].  The data is taken from interviews with Tyneside English speakers, from the DECTE corpus.
+
+Load in our usual packages:
+```{r}
+library(dplyr)
+library(ggplot2)
+```
+
+
+Let's load in our data:
+```{r}
+ing_data = read.csv("ing.csv")
+```
+
+Let's perform the usual functions:
+```{r}
+dim(ing_data)
+head(ing_data)
+tail(ing_data)
+colnames(ing_data)
+```
+Look at the data?  Which is our dependent variable?  Which factors might be interesting independent variables?  Are there any variables that might be useful to have that are not there?
+
+
+
+Let's check out the factor levels of the dependent variable:
+```{r}
+levels(ing_data$realisation)
+```
+
+Which is most common?
+```{r}
+table(ing_data$realisation)
+```
+
+
+Let's make a graph based on grammatical category:
+```{r}
+ggplot(ing_data, aes(grammatical_cat, fill = realisation)) + geom_bar(position = "fill")
+```
+
+I would like to make a graph of the following sound to see if that has an effect on whether we get the alveolar or velar variant.  Let's make a graph of that:
+
+```{r}
+ggplot(ing_data, aes(fol_seg, fill = realisation)) + geom_bar(position = "fill")
+```
+It's a bit of a mess.  I actually only really want to see if it's a vowel, consonant or pause following.  Note that a following pause in the data is annotated with `sp`, which I think means *space* (it is from the FAVE forced alignment system).  The other symbols are from the Arpabet, which is a keyboard alternative to the IPA.  You can find out what the codes mean here: (https://en.wikipedia.org/wiki/ARPABET).
+
+How can we make our data a bit more manageable in this sense?  We can recode it.
+
+# Tidying data
+
+Let's make a new column called `fol_context`, where we simplify `fol_seg` into just vowel, consonant and pause.  We can do this fairly easily in `dplyr` although the code will be long.  Firstly, we need to know what we want to change.  Let's look at the factor levels of `fol_seg`.
+
+```{r}
+levels(ing_data$fol_seg)
+```
+There are 34 levels that we need to recode.  This might take a while to type from scratch, but the `dplyr` verb `mutate` is very helpful here...
+
+```{r}
+ing_data = ing_data %>%
+  mutate(fol_context = recode(fol_seg, 
+          "AA" = "vowel", "AE" = "vowel", "AH" = "vowel", "AO" = "vowel", 
+          "AW" = "vowel", "AY" = "vowel", "B" = "consonant",  
+          "CH" = "consonant", "D"  = "consonant", "DH" = "consonant", 
+          "EH"  = "vowel", "ER"  = "vowel", "EY" = "vowel", 
+          "F"  = "consonant", "G"  = "consonant", "HH"  = "consonant", 
+          "IH" = "vowel", "IY"  = "vowel", "K"  = "consonant", 
+          "L"  = "consonant",  "M" = "consonant",  "N"  = "consonant",  
+          "ns" = "pause", "OW" = "vowel", "P"  = "consonant", 
+          "R"  = "consonant", "S"  = "consonant", "SH" = "consonant",
+          "sp"  = "pause", "T" = "consonant",  "TH" = "consonant", 
+          "V" = "consonant",  "W" = "consonant",  "Y" = "consonant" ))
+```
+Can you think of any other ways to recode this?
+
+Let's try plotting `fol_context` in the chunk below:
+```{r}
+ggplot(ing_data, aes(fol_context, fill = realisation)) + geom_bar(position = "fill")
+```
+What do we find?
+
+If you have finished this bit and want more of a challenge, try creating another variable based on `fol_seg` which is not as simplified as `fol_context`.
+
+# Joining datasets
+It would be good if we knew something about our interviewees - (ing) is a major sociolinguistic variable after all and is conditioned by sex, social class etc.  Do we have this data?
+
+Yes, we do, but it's in another spreadsheet.  Take a look at `social.csv` on your computer.  Let's read it in and call it `social`:
+```{r}
+social = read.csv("social.csv")
+social
+```
+It's only a small spreadsheet, which includes the codes for the speakers, but also some details about them.  It would be good if we could add these relevant columns to our big dataset.
+
+Fortunately, we can do this very easily with a `dplyr` function called `left_join`.  This is just one of many joining functions that you can read about [here](http://stat545.com/bit001_dplyr-cheatsheet.html).  Specifically, `left_join` will keep all rows from the first dataset listed (or the leftmost one), and then match them up to relevant rows in the second dataset listed (the rightmost one).  You can specify which columns should match, but to make it as easy as possible, we already have matching column names in the two datasets we want to join.  Let's look:
+```{r}
+colnames(ing_data)
+```
+```{r}
+colnames(social)
+```
+Both datasets have a factor called `file`, so we should be OK.  But first, let's just check that that have the same factor levels:
+```{r}
+levels(ing_data$file)
+```
+```{r}
+levels(social$file)
+```
+They both look the same.  The way `left_join` works means that it only cares about the first (left) dataset, so if there were factor levels in the second one that were not found in the first, R would just drop them.  If it was the other way around, R would just put `NA`s in for the missing social data.
+
+Let's join!
+```{r}
+ing_data = left_join(ing_data, social)
+```
+
+Now we have our social information on, try making a plot below of speaker sex against (ing).
+```{r}
+
+
+
+```
+
+## facet wrap
+In `ggplot`, we can add what is called a facet wrap, to look at two independent variables at a time.  Here's how we would look at `sex` and `social_class` at the same time:
+
+```{r}
+ggplot(ing_data, aes(sex, fill = realisation)) + geom_bar(position="fill") +
+  facet_wrap(~social_class)
+```
+What information does this graph give us that the other doesn't?
+
+
+# Basic statistical tests
+We can see from our graphs that females use *in* more than males in our dataset. But is this statistically significant?
+
+We can test this with a simple chi-square test.  A chi-square test looks at whether the numbers we have in our dataset are significantly different to what we would get if there was no difference between males and females.  The chi-square test returns a p-value.  If the p-value is less than 0.05, we can conclude that the result is significant.  
+
+For now, we can run a chi-square by running the function on our table of **raw counts**, not percentages.  Let's first create such a table:
+```{r}
+ing_sex.tbl = table(ing_data$realisation, ing_data$sex)
+ing_sex.tbl
+```
+
+```{r}
+# chi-square test on our table
+chisq.test(ing_sex.tbl, correct = FALSE) 
+```
+What does this mean?  Is this statistically significant?  
+
+By default, R applies [Yates's continuity correction](https://en.wikipedia.org/wiki/Yates's_correction_for_continuity) to the test, so the `correct = FALSE` part removes this.  Or you can leave this part of the code out to be very strict, but some say this can result in a Type II error. 
+
+![](https://s-media-cache-ak0.pinimg.com/736x/90/2e/f5/902ef504ca952825205d3e96f4c359df.jpg "Type I and II errors")
+
+# More plots
+
+I am now going to make a series of potentially useless graphs, to demonstrate `ggplot2`'s capabilities.  
+
+###  Continuous dependent variable AND independent variable: `geom_point`
+Young people speak so fast these days!  Let's prove this with a graph.
+
+```{r}
+# making a plot of speech rate by age
+ggplot(ing_data,  aes(age, vowels_per_second))+ 
+  geom_point()
+
+```
+
+Because we have many points from one speaker of the same age, our graph looks a little weird.  Again, this is used as proof of principle.  However, we can get it look a bit better than this by adding a smoothing line:
+```{r}
+# making a plot of speech rate, smoothing line
+ggplot(ing_data,  aes(age, vowels_per_second))+
+stat_smooth()+ #smoothing line
+geom_point()
+```
+
+
+Or if we want a straight line (based on a linear model), change the code to this:
+```{r}
+# making a plot of speech rate, straight line
+ggplot(ing_data,  aes(age, vowels_per_second))+
+  stat_smooth(method="lm")+ 
+  geom_point()+
+  ylab("Vowels per second") + #change y axis to this
+  theme_bw() + #gets rid of grey background
+  theme(legend.position="none") 
+```
+
+Let's make it more colourful.  Warning, we should change the colours within `geom_point`, because if we try to do it where we normally do it, `ggplot2` will think that this should contribute to the stats of the line (why not try doing that to see what happens?).
+
+```{r}
+# making a plot of speech rate, straight line, colour
+ggplot(ing_data,  aes(age, vowels_per_second))+
+  stat_smooth(method="lm")+ 
+  geom_point(aes(colour=name))+
+  ylab("Vowels per second") + #change y axis to this
+  theme_bw() + #gets rid of grey background
+  theme(legend.position="bottom") 
+```
+
+
+# Correlations
+
+We can test if vowels per second and speaker age are correlated.  Pearson’s Product-Moment Correlation Coefficient is a standardised measure of the relationship between two continuous variables.  Correlation does not equal causation.  Positive numbers mean the correlation is positive (the higher one goes, the higher the other goes), negative correlations mean the correlation is negative (the higher one goes, the lower the other gets).
+
+Interpretation:
+∗ 0–0.2 = very weak 
+∗ 0.2–0.4 = weak
+∗ 0.4 – 0.6 = moderate  
+∗ 0.6 – 0.8 = strong
+∗ 0.8 – 1 = very strong
+
+Let's run a correlation in R
+```{r}
+head(ing_data)
+cor(ing_data$vowels_per_second, ing_data$age)
+```
+What does this mean?  
+
+# Linear models
+
+Let's test on the `ChickWeight` dataset.
+```{r}
+head(ChickWeight)
+ggplot(ChickWeight, aes(Time, weight)) + geom_point() + stat_smooth(method="lm")
+```
+
+Linear model:
+```{r}
+mod = lm(weight ~ Time, data = ChickWeight)
+summary(mod)
+```
+
+Do you understand the most important parts of the model?  We'll discuss this in detail in class.
+
+Let's try for vowels per second and age:
+```{r}
+mod_vps = lm(vowels_per_second ~ age, data = ing_data)
+summary(mod_vps)
+```
+
+## Generalised linear models
+For categorical variables.  The assumptions are different (see slides) which is why we need to add the `family = binomial` call.
+
+Let's try for (ing) realisation vs. age.  
+```{r}
+mod_ing_age = glm(realisation ~ age, data = ing_data, family = "binomial")
+summary(mod_ing_age)
+```
+What do the estimates mean here?  Less clear, but a 0 is assigned to `in`, the first factor level, and a 1 is assigned to `ing`, the second factor level.  Therefore, a positive estimate means more `ing` and a negative more `in`.  This will be specific to your dataset, so you will need to change what comes first.
+
+## Categorical predictors
+
+Let's try for vowels per second and class:
+```{r}
+mod_vps_class = lm(vowels_per_second ~ social_class, data = ing_data)
+summary(mod_vps_class)
+```
+As you can see, it compares the factor levels to just the first one.  So, compared to the Middle Class speakers, Working Class speakers are slower by 0.13 seconds.
+
+As you get more advanced, you can try more factors in the model. 
+```{r}
+mod_social = lm(vowels_per_second ~ social_class + age + sex, data = ing_data)
+summary(mod_social)
+```
+It doesn't seem like `social_class` is doing anything.  We can compare a model with it in, and a model without it.
+
+Model without social class:
+```{r}
+mod_nosocial = lm(vowels_per_second ~ age + sex, data = ing_data)
+```
+
+Anova comparison:
+```{r}
+anova(mod_social, mod_nosocial)
+```
+If the p-value is non-significant, it means that adding social class into the model does not significantly improve it.
+
+
+# For future: mixed effects regression
+
+For those of you who want to carry on with more advanced regression, here is how I would do mixed effects linear and logistic regression in R.  This is not expected or required for this course.
+
+```{r}
+library(lme4) # needed for mixed effects regression (remember to install first time)
+```
+
+linear mixed effects
+```{r}
+mod_lmer = lmer(vowels_per_second ~ social_class + age + sex + fol_context + grammatical_cat + (1|word) + (1|name), data = ing_data)
+summary(mod_lmer)
+```
+
+generalised linear mixed effects
+```{r}
+mod_glmer = glmer(realisation ~ social_class + age + sex + fol_context + grammatical_cat + (1|word) + (1|name), data = ing_data, family = "binomial")
+summary(mod_glmer)
+```
+We get a warning that it has failed to converge.  Do not trust models that fail to converge!  This is a common problem with glmers (I'm happy to discuss this with you further).
